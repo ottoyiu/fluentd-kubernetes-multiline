@@ -1,0 +1,68 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: fluentd-kubernetes-multiline
+  namespace: kube-system
+  labels:
+    k8s-app: fluentd-kubernetes-multiline
+    kubernetes.io/cluster-service: "true"
+    addonmanager.kubernetes.io/mode: Reconcile
+    version: v0.0.1
+spec:
+  template:
+    metadata:
+      labels:
+        k8s-app: fluentd-kubernetes-multiline
+        kubernetes.io/cluster-service: "true"
+        version: v0.0.1
+      annotations:
+        scheduler.alpha.kubernetes.io/critical-pod: ''
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '24231'
+        # For 1.6, we keep the old tolerations in case of a downgrade to 1.5
+        scheduler.alpha.kubernetes.io/tolerations: '[{"key":"dedicated", "value":"master"}]'
+        log_drop: 'true'
+    spec:
+      containers:
+      - name: fluentd-es
+        image: fluentd-kubernetes-multiline:latest
+        imagePullPolicy: Always
+        command:
+          - '/bin/sh'
+          - '-c'
+          - '/usr/sbin/td-agent'
+        env:
+          - name: KUBERNETES_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+        resources:
+          limits:
+            memory: 2048Mi
+          requests:
+            cpu: 1000m
+            memory: 2048Mi
+        volumeMounts:
+        - name: varlog
+          mountPath: /var/log
+        - name: varlibdockercontainers
+          mountPath: /var/lib/docker/containers
+          readOnly: true
+        ports:
+        - containerPort: 24220
+          name: monitor-agent
+          protocol: TCP
+        - containerPort: 24231
+          name: prometheus
+          protocol: TCP
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: varlog
+        hostPath:
+          path: /var/log
+      - name: varlibdockercontainers
+        hostPath:
+          path: /var/lib/docker/containers
+      tolerations:
+        - key: "node-role.kubernetes.io/master"
+          effect: NoSchedule
